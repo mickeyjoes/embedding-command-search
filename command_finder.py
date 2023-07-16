@@ -16,11 +16,10 @@ def load_embeddings():
             command_name = filename[:-5]
             command_data = json.load(f)
             embeddings[command_name] = {
-                'embeddings': [example['embedding'] for example in command_data],
-                'examples': [example['text'] for example in command_data]
+                'embeddings': [example['embedding'] for example in command_data['embeddings']],
+                'examples': [example['text'] for example in command_data['embeddings']]
             }
     return embeddings
-
 
 
 def load_bert_model(model_name):
@@ -28,16 +27,21 @@ def load_bert_model(model_name):
     model = AutoModel.from_pretrained(model_name)
     return tokenizer, model
 
+
 def embed_strings(strings, tokenizer, model):
     input_ids = torch.tensor([tokenizer.encode(string) for string in strings])
     with torch.no_grad():
-        last_hidden_states = model(input_ids)[0]  # Shape: [batch_size, sequence_length, hidden_size]
-        embeddings = torch.mean(last_hidden_states, dim=1)  # Take the mean of the sequence to get a single vector
+        # Shape: [batch_size, sequence_length, hidden_size]
+        last_hidden_states = model(input_ids)[0]
+        # Take the mean of the sequence to get a single vector
+        embeddings = torch.mean(last_hidden_states, dim=1)
     return embeddings.tolist()
+
 
 def compute_distance(goal_vec, command_mean_vec):
     distance = cosine(goal_vec, command_mean_vec)
     return distance
+
 
 def find_best_command(goal_vec, embeddings):
     best_command = None
@@ -49,7 +53,8 @@ def find_best_command(goal_vec, embeddings):
         command_distance = 0.0
         command_data = embeddings[command_name]['embeddings']
         for emb in command_data:
-            command_distance -= cosine_similarity(np.array(goal_vec).reshape(1, -1), np.array(emb).reshape(1, -1))
+            command_distance -= cosine_similarity(
+                np.array(goal_vec).reshape(1, -1), np.array(emb).reshape(1, -1))
         command_distance /= len(command_data)
 
         if command_distance < best_command_distance:
@@ -64,13 +69,11 @@ def find_best_command(goal_vec, embeddings):
     return best_command, best_command_distance, next_best_command, next_best_command_distance
 
 
-
-
-
 def print_available_commands(embeddings):
     print("Available commands:")
     for command in embeddings.keys():
         print(f"- {command}")
+
 
 def main():
     # Load embeddings from files
@@ -98,19 +101,22 @@ def main():
 
         # Find the command with the smallest cosine distance to the goal
         (best_command, best_command_distance, next_best_command,
-        next_best_command_distance) = find_best_command(goal_vec, embeddings)
+         next_best_command_distance) = find_best_command(goal_vec, embeddings)
 
         # Output the best command for achieving the goal
         print("Task:", goal)
 
         if not np.isnan(best_command_distance):
             best_command_match = 100 * (1 - best_command_distance)
-            print(f"Best command ({best_command_match.item():.2f}%): {best_command}")
+            print(
+                f"Best command ({best_command_match.item():.2f}%): {best_command}")
 
         # Output the next best command for achieving the goal
         if not np.isnan(next_best_command_distance):
             next_best_command_match = 100 * (1 - next_best_command_distance)
-            print(f"Next best command ({next_best_command_match.item():.2f}%): {next_best_command}")
+            print(
+                f"Next best command ({next_best_command_match.item():.2f}%): {next_best_command}")
+
 
 if __name__ == '__main__':
     main()
